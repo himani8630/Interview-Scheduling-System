@@ -1,133 +1,180 @@
-Interview Scheduling System
+Automatic Interview Scheduling System
+1. System Overview
 
-This project is a Spring Boot–based Interview Scheduling System designed to automate the process of creating interview slots, allowing candidates to book interviews, and ensuring that no two candidates can book the same slot at the same time.
+The Automatic Interview Scheduling System is a backend REST API developed using Java, Spring Boot, and MySQL.
+It enables interviewers to define their availability and allows candidates to book, update, or cancel interview slots.
 
-The system is built using Java, Spring Boot, and MySQL and follows Clean Architecture principles with proper error handling and concurrency control.
+The system is specifically designed to handle concurrent booking requests, ensuring that no two candidates can book the same interview slot at the same time, even under high load.
 
-📌 Problem Statement
+2. Architecture
 
-In many organizations, interview scheduling is handled manually, which leads to:
+The application follows Clean Architecture principles, ensuring clear separation of concerns, scalability, and testability.
 
-Double booking of interview slots
+Controller Layer
+Handles HTTP requests, request validation, and response formatting.
 
-Poor visibility of interviewer availability
+Service Layer
+Contains core business logic such as:
 
-Difficulty in managing weekly interview limits
+Slot generation
 
-This project solves these problems by providing a backend system that:
+Booking rules
 
-Automatically generates interview slots
+Weekly interview limit enforcement
 
-Allows candidates to book only one available slot
+Atomic rescheduling
 
-Prevents race conditions during booking
+Repository Layer
+Uses Spring Data JPA to abstract database operations and manage persistence.
 
-🎯 What This System Does
+Domain Layer
+Contains core entities such as Interviewer, Availability, InterviewSlot, and Booking, which directly map to the database schema.
 
-Interviewer provides availability
+3. Key Features & Implementation Details
+A. Automatic Slot Generation
 
-The interviewer defines:
+Logic:
+Interviewers define their recurring weekly availability (for example, Mondays from 9 AM to 12 PM with 30-minute slots).
+The system projects this availability 14 days into the future and generates individual InterviewSlot records.
 
-Available days
+Design Decision:
+Slots are pre-generated and stored in the database instead of being calculated dynamically.
 
-Start time & end time
+Benefit:
 
-Slot duration
+Fetching available slots becomes extremely fast
 
-Maximum interviews allowed per week
+Reduces computation during API calls
 
-System generates slots automatically
+Improves system scalability
 
-Based on interviewer availability
+B. Concurrency Handling (Race Conditions)
 
-Slots are generated for the next 2 weeks
+Problem:
+Multiple candidates may attempt to book the same slot at the exact same time.
 
-Candidate selects a slot
+Solution:
+The system uses Optimistic Locking through JPA’s @Version annotation.
 
-Candidates can view only available slots
+How It Works:
 
-Each candidate can book only one slot
+Each slot has a version field
 
-Slot confirmation
+When two transactions try to book the same slot, only one succeeds
 
-Once booked, the slot status changes to BOOKED
+The second transaction fails automatically due to version mismatch
 
-The same slot cannot be booked again
+Trade-off Discussion:
+Optimistic locking was chosen over pessimistic locking because:
 
-Slot update & cancellation
+Interview bookings are typically low-contention
 
-Bookings can be updated or cancelled safely
+It provides better throughput
 
-🚀 Key Features Explained
-✅ Automatic Slot Generation
+It avoids unnecessary database row blocking
 
-The system automatically creates interview slots for the next two weeks using the interviewer’s availability and slot duration.
+C. Atomic Booking & Rescheduling
 
-✅ Booking Management
+Implementation:
+Critical booking and rescheduling operations are wrapped using Spring’s @Transactional annotation.
 
-Candidates can:
+Behavior:
+For rescheduling:
 
-Book a slot
+The old slot is released
 
-View their bookings
+The new slot is booked
 
-Update or cancel a booking
+If either step fails, the entire transaction is rolled back.
 
-✅ Race Condition Handling
+Result:
 
-To prevent double booking, the system uses:
+No partial updates
 
-Optimistic Locking (@Version)
+Data integrity is always preserved
 
-Database constraints
+4. API Endpoints
+Method	Endpoint	Description
+POST	/api/v1/interviewers	Create interviewer and define availability
+GET	/api/v1/slots/available	Fetch available slots for next 14 days
+POST	/api/v1/bookings	Book an interview slot (race-condition safe)
+PUT	/api/v1/bookings/{id}	Update an existing booking
+DELETE	/api/v1/bookings/{id}	Cancel a booking
+5. Database Schema Design
 
-Transactional booking logic
+interviewers
+Stores interviewer details and weekly interview limits.
 
-This ensures that even if two users try to book the same slot at the same time, only one succeeds.
+availabilities
+Stores recurring weekly availability rules.
 
-✅ Weekly Interview Limit
+interview_slots
+Stores actual interview slots generated for the next 14 days.
+Includes a version column for optimistic locking.
 
-Each interviewer can define how many interviews can be conducted per week.
-The system enforces this limit automatically.
+bookings
+Stores candidate booking information and booking status.
 
-✅ Cursor-Based Pagination
+6. Testing Strategy
 
-Available slots are fetched using cursor-based pagination, which:
+Unit & Integration Testing were implemented using JUnit 5 and Mockito.
 
-Improves performance
+Concurrency Testing:
+Multi-threaded tests simulate multiple candidates attempting to book the same slot simultaneously.
 
-Avoids duplicate or missing records
+Result:
 
-Works well for large datasets
+Exactly one booking succeeds
 
-✅ Clean Architecture
+Remaining attempts fail safely without data corruption
 
-The project is structured into:
+7. Bonus Features & Enhancements
+A. Cursor-Based Pagination
 
-Controller layer (API handling)
+Implementation:
+Cursor-based pagination is used instead of traditional offset pagination.
 
-Service layer (business logic)
+Trade-offs:
 
-Repository layer (database access)
+Pros:
 
-Domain layer (entities)
+Constant-time performance
 
-This makes the code clean, testable, and maintainable.
+Ideal for infinite scroll or “Load More” UIs
 
-🛠️ Technology Stack
+Cons:
 
-Java 17
+Cannot jump directly to a specific page number
 
-Spring Boot 3
+Acceptable trade-off for scheduling systems
 
-Spring Data JPA
+B. Basic UI & Debouncing
 
-Hibernate
+UI:
+A lightweight HTML + JavaScript interface is provided in
+src/main/resources/static/index.html.
 
-MySQL
+Debouncing:
+A custom JavaScript debounce() function is implemented.
 
-Maven
+Purpose:
 
-JUnit 5 & Mockito
+Prevents multiple rapid booking requests
 
-Lombok
+Reduces unnecessary backend load
+
+Avoids accidental double submissions
+
+8. Conclusion
+
+This project demonstrates:
+
+Real-world backend system design
+
+Safe concurrency handling
+
+Clean architecture implementation
+
+Scalable and maintainable API development
+
+It is suitable for backend interviews, system design discussions, and production-ready evaluation tasks.
